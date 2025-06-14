@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">PaceCalc</string>
+    <string name="distancia_km">Distância (km)</string>
+    <string name="minutos">Minutos</string>
+    <string name="segundos">Segundos</string>
+    <string name="calcular">Calcular</string>
+    <string name="resumo_da_corrida">Resumo da Corrida</string>
+</resources>
