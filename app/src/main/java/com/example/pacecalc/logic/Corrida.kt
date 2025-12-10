@@ -4,92 +4,100 @@ import kotlin.math.floor
 import kotlin.math.roundToInt
 
 /**
- * Representa uma corrida, calculando um dos três valores (distância, tempo ou pace)
- * com base nos outros dois.
+ * Representa uma corrida.
+ * O sistema agora trabalha com 4 grandezas possíveis (Distância, Tempo, Pace, Velocidade),
+ * mas matematicamente Pace e Velocidade representam a mesma dimensão (Intensidade).
  *
- * O construtor é privado. A criação de instâncias DEVE ser feita através das
- * funções de fábrica no 'companion object' para evitar ambiguidade.
+ * A classe calcula os valores faltantes desde que sejam fornecidos dados de duas dimensões distintas:
+ * 1. Distância
+ * 2. Tempo
+ * 3. Intensidade (Pace OU Velocidade)
  */
 class Corrida private constructor(
-    distanciaKm: Double?,
-    tempoTotalMinutos: Double?,
-    paceMinutosPorKm: Double?
+    val distanciaFinal: Double,
+    val tempoFinal: Double,
+    val paceFinal: Double,
+    val velocidadeFinal: Double
 ) {
-    val distanciaFinal: Double
-    val tempoFinal: Double
-    val paceFinal: Double
 
-    init {
-        when {
-            // Caso 1: Calcula o Pace
-            distanciaKm != null && tempoTotalMinutos != null -> {
-                if (distanciaKm <= 0) throw IllegalArgumentException("A distância deve ser um valor positivo.")
-                distanciaFinal = distanciaKm
-                tempoFinal = tempoTotalMinutos
-                paceFinal = tempoTotalMinutos / distanciaKm
-            }
-            // Caso 2: Calcula o Tempo
-            distanciaKm != null && paceMinutosPorKm != null -> {
-                if (distanciaKm <= 0) throw IllegalArgumentException("A distância deve ser um valor positivo.")
-                distanciaFinal = distanciaKm
-                paceFinal = paceMinutosPorKm
-                tempoFinal = paceMinutosPorKm * distanciaKm
-            }
-            // Caso 3: Calcula a Distância
-            tempoTotalMinutos != null && paceMinutosPorKm != null -> {
-                if (paceMinutosPorKm <= 0) throw IllegalArgumentException("O pace deve ser um valor positivo.")
-                tempoFinal = tempoTotalMinutos
-                paceFinal = paceMinutosPorKm
-                distanciaFinal = tempoTotalMinutos / paceMinutosPorKm
-            }
-            else -> throw IllegalArgumentException("Forneça exatamente dois dos três valores (distância, tempo ou pace).")
-        }
-    }
-
-    /**
-     * Objeto companheiro que contém as funções de fábrica (factory functions).
-     * Esta é a maneira correta de criar objetos 'Corrida'.
-     */
     companion object {
         /**
-         * Cria uma instância de Corrida para calcular o PACE a partir de distância e tempo.
+         * Tenta criar uma instância de Corrida baseada em parâmetros opcionais.
+         * É necessário fornecer dados para pelo menos duas das três dimensões (Distância, Tempo, Intensidade).
          */
-        fun porDistanciaETempo(distanciaKm: Double, tempoMinutos: Int, tempoSegundos: Int): Corrida {
-            return Corrida(
-                distanciaKm = distanciaKm,
-                tempoTotalMinutos = tempoMinutos + tempoSegundos / 60.0,
-                paceMinutosPorKm = null
-            )
-        }
+        fun calcular(
+            distanciaKm: Double?,
+            tempoMinutos: Int?,
+            tempoSegundos: Int?,
+            paceMinutos: Int?,
+            paceSegundos: Int?,
+            velocidadeKmH: Double?
+        ): Corrida {
+            // 1. Normalizar Entradas
+            val d = if (distanciaKm != null && distanciaKm > 0) distanciaKm else null
 
-        /**
-         * Cria uma instância de Corrida para calcular o TEMPO a partir de distância e pace.
-         */
-        fun porDistanciaEPace(distanciaKm: Double, paceMinutos: Int, paceSegundos: Int): Corrida {
-            return Corrida(
-                distanciaKm = distanciaKm,
-                tempoTotalMinutos = null,
-                paceMinutosPorKm = paceMinutos + paceSegundos / 60.0
-            )
-        }
+            val t: Double? = if ((tempoMinutos != null || tempoSegundos != null)) {
+                val total = (tempoMinutos ?: 0) + (tempoSegundos ?: 0) / 60.0
+                if (total > 0) total else null
+            } else null
 
-        /**
-         * Cria uma instância de Corrida para calcular a DISTÂNCIA a partir de tempo e pace.
-         */
-        fun porTempoEPace(tempoMinutos: Int, tempoSegundos: Int, paceMinutos: Int, paceSegundos: Int): Corrida {
-            return Corrida(
-                distanciaKm = null,
-                tempoTotalMinutos = tempoMinutos + tempoSegundos / 60.0,
-                paceMinutosPorKm = paceMinutos + paceSegundos / 60.0
-            )
+            // Determina a "Intensidade" (Pace) baseada no Pace OU na Velocidade fornecida
+            var p: Double? = if ((paceMinutos != null || paceSegundos != null)) {
+                val total = (paceMinutos ?: 0) + (paceSegundos ?: 0) / 60.0
+                if (total > 0) total else null
+            } else null
+
+            // Se não tem Pace, mas tem Velocidade, converte Velocidade para Pace
+            // Fórmula: Pace (min/km) = 60 / Velocidade (km/h)
+            if (p == null && velocidadeKmH != null && velocidadeKmH > 0) {
+                p = 60.0 / velocidadeKmH
+            }
+
+            // 2. Calcular o que falta (Baseado em Distância, Tempo e Pace)
+            val dFinal: Double
+            val tFinal: Double
+            val pFinal: Double
+
+            when {
+                // Caso 1: Distância e Tempo -> Calcula Pace (e Velocidade)
+                d != null && t != null -> {
+                    dFinal = d
+                    tFinal = t
+                    pFinal = t / d
+                }
+                // Caso 2: Distância e Pace (ou Velocidade convertida) -> Calcula Tempo
+                d != null && p != null -> {
+                    dFinal = d
+                    pFinal = p
+                    tFinal = p * d
+                }
+                // Caso 3: Tempo e Pace (ou Velocidade convertida) -> Calcula Distância
+                t != null && p != null -> {
+                    tFinal = t
+                    pFinal = p
+                    dFinal = t / p
+                }
+                else -> {
+                    throw IllegalArgumentException("Forneça valores para pelo menos dois campos distintos (ex: Distância e Tempo, ou Tempo e Velocidade).")
+                }
+            }
+
+            // 3. Calcula a Velocidade Final baseada no Pace final calculado
+            val vFinal = 60.0 / pFinal
+
+            return Corrida(dFinal, tFinal, pFinal, vFinal)
         }
     }
 
     // --- Funções de Formatação ---
 
     fun getPaceFormatado(): String = formatarDecimalParaTempo(paceFinal)
+
     fun getTempoTotalFormatado(): String = formatarDecimalParaTempo(tempoFinal)
+
     fun getDistanciaFormatada(): String = "%.2f km".format(distanciaFinal)
+
+    fun getVelocidadeFormatada(): String = "%.2f km/h".format(velocidadeFinal)
 
     private fun formatarDecimalParaTempo(valorDecimal: Double): String {
         val minutos = floor(valorDecimal).toInt()

@@ -2,12 +2,15 @@ package com.example.pacecalc.ui.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.pacecalc.R
@@ -19,46 +22,63 @@ import com.example.pacecalc.ui.theme.PaceCalcTheme
 fun CorridaScreen() {
     // --- Gerenciamento de Estado ---
     var distancia by remember { mutableStateOf("") }
+
     var tempoMin by remember { mutableStateOf("") }
     var tempoSeg by remember { mutableStateOf("") }
+
     var paceMin by remember { mutableStateOf("") }
     var paceSeg by remember { mutableStateOf("") }
+
+    var velocidade by remember { mutableStateOf("") }
 
     var resultado by remember { mutableStateOf<Corrida?>(null) }
     var erro by remember { mutableStateOf<String?>(null) }
 
+    // Gerenciador de Foco para esconder teclado
+    val focusManager = LocalFocusManager.current
+
     // --- Lógica de Cálculo ---
     fun calcular() {
-        // Limpa resultados anteriores
         resultado = null
         erro = null
 
-        // Converte valores de String para numérico, tratando nulo como zero.
-        val dist = distancia.toDoubleOrNull()
-        val tMin = tempoMin.toIntOrNull()
-        val tSeg = tempoSeg.toIntOrNull()
-        val pMin = paceMin.toIntOrNull()
-        val pSeg = paceSeg.toIntOrNull()
-
-        // Valida se os campos foram preenchidos para permitir o cálculo
-        val hasDist = dist != null
-        val hasTempo = tMin != null || tSeg != null
-        val hasPace = pMin != null || pSeg != null
-
         try {
-            // **MUDANÇA AQUI: Usando as funções de fábrica em vez dos construtores.**
-            resultado = when {
-                hasDist && hasTempo -> Corrida.porDistanciaETempo(dist!!, tMin ?: 0, tSeg ?: 0)
-                hasDist && hasPace -> Corrida.porDistanciaEPace(dist!!, pMin ?: 0, pSeg ?: 0)
-                hasTempo && hasPace -> Corrida.porTempoEPace(tMin ?: 0, tSeg ?: 0, pMin ?: 0, pSeg ?: 0)
-                else -> {
-                    erro = "Preencha pelo menos dois dos três campos."
-                    null
-                }
-            }
+            val dist = distancia.toDoubleOrNull()
+            val tMin = tempoMin.toIntOrNull()
+            val tSeg = tempoSeg.toIntOrNull()
+            val pMin = paceMin.toIntOrNull()
+            val pSeg = paceSeg.toIntOrNull()
+            val vel = velocidade.toDoubleOrNull()
+
+            resultado = Corrida.calcular(
+                distanciaKm = dist,
+                tempoMinutos = tMin,
+                tempoSegundos = tSeg,
+                paceMinutos = pMin,
+                paceSegundos = pSeg,
+                velocidadeKmH = vel
+            )
+            // Fecha o teclado se der sucesso
+            focusManager.clearFocus()
+
+        } catch (e: IllegalArgumentException) {
+            erro = e.message
         } catch (e: Exception) {
-            erro = e.message ?: "Ocorreu um erro desconhecido."
+            erro = "Ocorreu um erro inesperado."
         }
+    }
+
+    // --- Nova Função: Limpar Campos ---
+    fun limpar() {
+        distancia = ""
+        tempoMin = ""
+        tempoSeg = ""
+        paceMin = ""
+        paceSeg = ""
+        velocidade = ""
+        resultado = null
+        erro = null
+        focusManager.clearFocus()
     }
 
     // --- UI Layout ---
@@ -66,41 +86,77 @@ fun CorridaScreen() {
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
-            .verticalScroll(rememberScrollState()), // Permite rolagem em telas menores
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(stringResource(id = R.string.app_name), style = MaterialTheme.typography.headlineMedium)
 
         // Seção de Entradas
+
+        // 1. Distância
         InputField(
             value = distancia,
             onValueChange = { distancia = it },
             label = stringResource(R.string.distancia_km),
             isDecimal = true,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            imeAction = ImeAction.Next
         )
+
+        // 2. Tempo
         TimeInputGroup(
             minutes = tempoMin,
             onMinutesChange = { tempoMin = it },
             seconds = tempoSeg,
             onSecondsChange = { tempoSeg = it },
-            label = "Tempo Total"
+            label = "Tempo Total",
+            secondsImeAction = ImeAction.Next
         )
+
+        // 3. Pace
         TimeInputGroup(
             minutes = paceMin,
             onMinutesChange = { paceMin = it },
             seconds = paceSeg,
             onSecondsChange = { paceSeg = it },
-            label = "Pace Médio (/km)"
+            label = "Pace Médio (/km)",
+            secondsImeAction = ImeAction.Next
         )
 
-        // Botão de Ação
-        Button(
-            onClick = { calcular() },
-            modifier = Modifier.fillMaxWidth()
+        // 4. Velocidade
+        InputField(
+            value = velocidade,
+            onValueChange = { velocidade = it },
+            label = "Velocidade Média (km/h)",
+            isDecimal = true,
+            modifier = Modifier.fillMaxWidth(),
+            imeAction = ImeAction.Done,
+            keyboardActions = KeyboardActions(
+                onDone = { calcular() }
+            )
+        )
+
+        // Botões de Ação (Alterado para incluir Limpar)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(stringResource(R.string.calcular), style = MaterialTheme.typography.titleMedium)
+            // Botão Secundário: Limpar
+            OutlinedButton(
+                onClick = { limpar() },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Limpar")
+            }
+
+            // Botão Primário: Calcular
+            Button(
+                onClick = { calcular() },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(stringResource(R.string.calcular), style = MaterialTheme.typography.titleMedium)
+            }
         }
 
         // Seção de Resultados
