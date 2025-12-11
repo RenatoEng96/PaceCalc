@@ -13,71 +13,32 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.pacecalc.R
-import com.example.pacecalc.logic.Corrida
 import com.example.pacecalc.ui.components.*
 import com.example.pacecalc.ui.theme.PaceCalcTheme
+import com.example.pacecalc.ui.viewmodel.CorridaViewModel
 
 @Composable
-fun CorridaScreen() {
-    // --- Gerenciamento de Estado ---
-    var distancia by remember { mutableStateOf("") }
+fun CorridaScreen(
+    // Injeção do ViewModel (cria um novo ou recupera o existente)
+    viewModel: CorridaViewModel = viewModel()
+) {
+    // Observa o estado do ViewModel. Sempre que o estado mudar, a UI redesenha.
+    val uiState by viewModel.uiState.collectAsState()
 
-    var tempoMin by remember { mutableStateOf("") }
-    var tempoSeg by remember { mutableStateOf("") }
-
-    var paceMin by remember { mutableStateOf("") }
-    var paceSeg by remember { mutableStateOf("") }
-
-    var velocidade by remember { mutableStateOf("") }
-
-    var resultado by remember { mutableStateOf<Corrida?>(null) }
-    var erro by remember { mutableStateOf<String?>(null) }
-
-    // Gerenciador de Foco para esconder teclado
     val focusManager = LocalFocusManager.current
 
-    // --- Lógica de Cálculo ---
-    fun calcular() {
-        resultado = null
-        erro = null
-
-        try {
-            val dist = distancia.toDoubleOrNull()
-            val tMin = tempoMin.toIntOrNull()
-            val tSeg = tempoSeg.toIntOrNull()
-            val pMin = paceMin.toIntOrNull()
-            val pSeg = paceSeg.toIntOrNull()
-            val vel = velocidade.toDoubleOrNull()
-
-            resultado = Corrida.calcular(
-                distanciaKm = dist,
-                tempoMinutos = tMin,
-                tempoSegundos = tSeg,
-                paceMinutos = pMin,
-                paceSegundos = pSeg,
-                velocidadeKmH = vel
-            )
-            // Fecha o teclado se der sucesso
+    // Efeito Lateral: Quando um resultado é calculado com sucesso, esconde o teclado
+    LaunchedEffect(uiState.resultado) {
+        if (uiState.resultado != null) {
             focusManager.clearFocus()
-
-        } catch (e: IllegalArgumentException) {
-            erro = e.message
-        } catch (e: Exception) {
-            erro = "Ocorreu um erro inesperado."
         }
     }
 
-    // --- Nova Função: Limpar Campos ---
-    fun limpar() {
-        distancia = ""
-        tempoMin = ""
-        tempoSeg = ""
-        paceMin = ""
-        paceSeg = ""
-        velocidade = ""
-        resultado = null
-        erro = null
+    // Função auxiliar para limpar e esconder o teclado
+    fun limparTudo() {
+        viewModel.limpar()
         focusManager.clearFocus()
     }
 
@@ -92,12 +53,10 @@ fun CorridaScreen() {
     ) {
         Text(stringResource(id = R.string.app_name), style = MaterialTheme.typography.headlineMedium)
 
-        // Seção de Entradas
-
         // 1. Distância
         InputField(
-            value = distancia,
-            onValueChange = { distancia = it },
+            value = uiState.distancia,
+            onValueChange = viewModel::onDistanciaChange,
             label = stringResource(R.string.distancia_km),
             isDecimal = true,
             modifier = Modifier.fillMaxWidth(),
@@ -106,64 +65,62 @@ fun CorridaScreen() {
 
         // 2. Tempo
         TimeInputGroup(
-            minutes = tempoMin,
-            onMinutesChange = { tempoMin = it },
-            seconds = tempoSeg,
-            onSecondsChange = { tempoSeg = it },
+            minutes = uiState.tempoMin,
+            onMinutesChange = viewModel::onTempoMinChange,
+            seconds = uiState.tempoSeg,
+            onSecondsChange = viewModel::onTempoSegChange,
             label = "Tempo Total",
             secondsImeAction = ImeAction.Next
         )
 
         // 3. Pace
         TimeInputGroup(
-            minutes = paceMin,
-            onMinutesChange = { paceMin = it },
-            seconds = paceSeg,
-            onSecondsChange = { paceSeg = it },
+            minutes = uiState.paceMin,
+            onMinutesChange = viewModel::onPaceMinChange,
+            seconds = uiState.paceSeg,
+            onSecondsChange = viewModel::onPaceSegChange,
             label = "Pace Médio (/km)",
             secondsImeAction = ImeAction.Next
         )
 
         // 4. Velocidade
         InputField(
-            value = velocidade,
-            onValueChange = { velocidade = it },
+            value = uiState.velocidade,
+            onValueChange = viewModel::onVelocidadeChange,
             label = "Velocidade Média (km/h)",
             isDecimal = true,
             modifier = Modifier.fillMaxWidth(),
             imeAction = ImeAction.Done,
             keyboardActions = KeyboardActions(
-                onDone = { calcular() }
+                onDone = { viewModel.calcular() }
             )
         )
 
-        // Botões de Ação (Alterado para incluir Limpar)
+        // Botões de Ação
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Botão Secundário: Limpar
             OutlinedButton(
-                onClick = { limpar() },
+                onClick = { limparTudo() },
                 modifier = Modifier.weight(1f)
             ) {
                 Text("Limpar")
             }
 
-            // Botão Primário: Calcular
             Button(
-                onClick = { calcular() },
+                onClick = { viewModel.calcular() },
                 modifier = Modifier.weight(1f)
             ) {
                 Text(stringResource(R.string.calcular), style = MaterialTheme.typography.titleMedium)
             }
         }
 
-        // Seção de Resultados
-        erro?.let {
+        // Seção de Resultados e Erros
+        uiState.erro?.let {
             Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyLarge)
         }
-        resultado?.let {
+        uiState.resultado?.let {
             ResultCard(corrida = it)
         }
     }
